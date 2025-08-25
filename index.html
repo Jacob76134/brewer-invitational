@@ -36,7 +36,9 @@
             const hasValidConfig = firebaseConfig.apiKey && 
                                  firebaseConfig.apiKey !== "API_KEY" && 
                                  firebaseConfig.projectId && 
-                                 firebaseConfig.projectId !== "PROJECT_ID";
+                                 firebaseConfig.projectId !== "PROJECT_ID" &&
+                                 firebaseConfig.authDomain &&
+                                 firebaseConfig.authDomain !== "AUTH_DOMAIN";
             
             if (hasValidConfig) {
                 try {
@@ -281,7 +283,7 @@
             justify-content: flex-start;
             align-items: center;
             overflow-x: hidden;
-            cursor: url('https://icons.iconarchive.com/icons/pixelmixer/basic-web/16/pointer-icon.png'), auto;
+            cursor: default;
 
             /* Pepsi World-inspired green grid background */
             background-image:

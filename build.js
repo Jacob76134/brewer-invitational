@@ -21,7 +21,9 @@ htmlContent = htmlContent.replace(/"PROJECT_ID"/g, `"${projectId}"`);
 htmlContent = htmlContent.replace(/"STORAGE_BUCKET"/g, `"${storageBucket}"`);
 htmlContent = htmlContent.replace(/"MESSAGING_SENDER_ID"/g, `"${messagingSenderId}"`);
 htmlContent = htmlContent.replace(/"APP_ID"/g, `"${appId}"`);
-htmlContent = htmlContent.replace(/"MEASUREMENT_ID"/g, `"${measurementId}"`);
+// Handle measurementId specially - if undefined, use empty string
+const measurementIdValue = measurementId || "";
+htmlContent = htmlContent.replace(/"MEASUREMENT_ID"/g, `"${measurementIdValue}"`);
 
 // Write the updated content back to index.html
 fs.writeFileSync(indexPath, htmlContent);
