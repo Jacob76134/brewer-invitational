@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Brewer Invitational 2025</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=VT323&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Firebase Configuration -->
+    <script src="config.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Global Variables (Vercel environment variables)
+        const firebaseConfig = {
+            apiKey: process.env.API_KEY || window.API_KEY,
+            authDomain: process.env.AUTH_DOMAIN || window.AUTH_DOMAIN,
+            projectId: process.env.PROJECT_ID || window.PROJECT_ID,
+            storageBucket: process.env.STORAGE_BUCKET || window.STORAGE_BUCKET,
+            messagingSenderId: process.env.MESSAGING_SENDER_ID || window.MESSAGING_SENDER_ID,
+            appId: process.env.APP_ID || window.APP_ID,
+            measurementId: process.env.MEASUREMENT_ID || window.MEASUREMENT_ID
+        };
+
+
+
+        let app;
+        let db;
+        let userId = crypto.randomUUID(); // Generate a UUID for the user directly
+
+        // The password to access the site
+        const SITE_PASSWORD = "brewer2025";
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize Firebase only if config is available
+            if (Object.keys(firebaseConfig).length > 0) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                console.log("Firebase initialized. User ID:", userId);
+            } else {
+                console.warn("Firebase config not available. Database features will be disabled.");
+                // showMessage('Warning', 'Firebase is not configured. Registration and player list features will not work.');
+            }
+
+            // Client-side navigation logic
+            const contentSections = document.querySelectorAll('.content-section');
+            const navButtons = document.querySelectorAll('.btn[data-target]');
+
+            function showSection(targetId) {
+                contentSections.forEach(section => {
+                    if (section.id === targetId) {
+                        section.classList.remove('hidden');
+                        if (targetId === 'players-page' && db) { // Load players when navigating to the page
+                            loadPlayers();
+                        }
+                    } else {
+                        section.classList.add('hidden');
+                    }
+                });
+            }
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const targetId = button.getAttribute('data-target');
+                    showSection(targetId);
+                });
+            });
+
+            // Initially show the login page
+            showSection('login-page');
+        });
+
+        // Function to check password and grant access
+        window.checkPassword = () => {
+            const passwordInput = document.getElementById('site-password-input');
+            const enteredPassword = passwordInput.value;
+
+            if (enteredPassword === SITE_PASSWORD) {
+                document.getElementById('login-page').classList.add('hidden');
+                document.getElementById('main-content-wrapper').classList.remove('hidden');
+                
+                // Change the banner text
+                document.querySelector('.top-banner').textContent = 'BREWER INVITATIONAL WORLD';
+                
+                // Show the home page content directly
+                document.getElementById('home-page-content').classList.remove('hidden');
+                document.getElementById('draft-explanation-page').classList.add('hidden');
+                document.getElementById('registration-page').classList.add('hidden');
+                document.getElementById('schedule-page').classList.add('hidden');
+                document.getElementById('players-page').classList.add('hidden');
+            } else {
+                showMessage('ACCESS DENIED!', 'INCORRECT PROTOCOL. PLEASE RE-ENTER PASSWORD.');
+                passwordInput.value = ''; // Clear password input
+            }
+        };
+
+        // Function to register a player
+        const registerPlayer = async () => {
+            const playerNameInput = document.getElementById('player-name-input');
+            const playerName = playerNameInput.value.trim();
+
+            if (!db) {
+                showMessage('Error', 'Firebase database not initialized. Cannot register player.');
+                return;
+            }
+
+            if (!playerName) {
+                showMessage('Error', 'Please enter your Planeswalker Name!');
+                return;
+            }
+
+            // Validate name format and length
+            if (playerName.length > 25) {
+                showMessage('Invalid Name', 'Planeswalker name must be 25 characters or less!');
+                return;
+            }
+
+            // Check for exactly one space (first and last name only)
+            const spaceCount = (playerName.match(/ /g) || []).length;
+            if (spaceCount !== 1) {
+                showMessage('Invalid Name', 'Please enter exactly two names separated by one space (e.g., "John Smith")');
+                return;
+            }
+
+            // Check for valid characters (letters, spaces, hyphens, apostrophes)
+            if (!/^[a-zA-Z\s\-']+$/.test(playerName)) {
+                showMessage('Invalid Name', 'Name can only contain letters, spaces, hyphens, and apostrophes');
+                return;
+            }
+
+            try {
+                // Split the name into first and last
+                const nameParts = playerName.split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || '';
+
+                // Additional validation for individual parts
+                if (firstName.length < 2 || lastName.length < 2) {
+                    showMessage('Invalid Name', 'Both first and last names must be at least 2 characters long');
+                    return;
+                }
+
+                // Store player data in the players collection
+                const playersCollectionRef = collection(db, 'artifacts/brewer-invitational/public/data/players');
+                await setDoc(doc(playersCollectionRef), { // Let Firebase generate the document ID
+                    first: firstName,
+                    last: lastName,
+                    registeredAt: new Date().toISOString()
+                });
+                
+                // Clear input
+                playerNameInput.value = '';
+                
+                // Show success message first
+                showMessage('Success!', `Planeswalker ${playerName} registered for The Brewer Invitational!`);
+                
+                // Then navigate to the players list page after a short delay
+                setTimeout(() => {
+                    // Hide all content sections
+                    document.getElementById('home-page-content').classList.add('hidden');
+                    document.getElementById('draft-explanation-page').classList.add('hidden');
+                    document.getElementById('registration-page').classList.add('hidden');
+                    document.getElementById('schedule-page').classList.add('hidden');
+                    document.getElementById('players-page').classList.remove('hidden');
+                    
+                    // Load players immediately
+                    loadPlayers();
+                }, 1000); // Wait 1 second for the modal to be visible
+                
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showMessage('Error', `Failed to register: ${e.message}`);
+            }
+        };
+
+        // Function to load players for the players page
+        const loadPlayers = () => {
+            if (!db) {
+                // Show message if DB is not ready
+                document.getElementById('players-list-content').innerHTML = `
+                    <p style="text-align: center;">*DATABASE OF PLANESWALKERS INACCESSIBLE. PLEASE RE-INITIATE CONNECTION.*</p>
+                `;
+                return;
+            }
+
+            const playersCollectionRef = collection(db, 'artifacts/brewer-invitational/public/data/players');
+            const playersQuery = query(playersCollectionRef); // No orderBy to avoid index issues
+
+            onSnapshot(playersQuery, (snapshot) => {
+                const players = [];
+                snapshot.forEach((doc) => {
+                    players.push(doc.data());
+                });
+
+                // Sort players by last name, then first name
+                players.sort((a, b) => {
+                    const lastNameCompare = (a.last || '').localeCompare(b.last || '');
+                    if (lastNameCompare !== 0) return lastNameCompare;
+                    return (a.first || '').localeCompare(b.first || '');
+                });
+
+                const playersListDiv = document.getElementById('players-list-content');
+                if (players.length > 0) {
+                    playersListDiv.innerHTML = `
+                        <ol style="list-style-type: decimal; padding-left: 20px; text-align: left;">
+                            ${players.map(player => `
+                                <li style="margin-bottom: 5px; color: #fff;">
+                                    <strong>${player.first} ${player.last}</strong>
+                                </li>
+                            `).join('')}
+                        </ol>
+                    `;
+                } else {
+                    playersListDiv.innerHTML = `
+                        <p style="text-align: center;">*NO PLANESWALKERS DETECTED. BE THE FIRST TO REGISTER!*</p>
+                    `;
+                }
+            }, (error) => {
+                console.error("Error fetching players: ", error);
+                const playersListDiv = document.getElementById('players-list-content');
+                playersListDiv.innerHTML = `
+                    <p style="text-align: center; color: #ff0000;">*DATABASE CORRUPTION DETECTED. ERROR: ${error.message}*</p>
+                `;
+            });
+        };
+
+        // Custom Modal for Messages (replaces alert())
+        const showMessage = (title, message) => {
+            const modal = document.getElementById('custom-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const modalCloseBtn = document.getElementById('modal-close-btn');
+
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modal.classList.add('show'); // Show modal using CSS class
+
+            // Close modal on button click
+            modalCloseBtn.onclick = () => {
+                modal.classList.remove('show'); // Hide modal
+            };
+
+            // Close modal on outside click (optional, but good UX)
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.classList.remove('show'); // Hide modal
+                }
+            });
+        };
+
+        // Make functions available globally
+        window.registerPlayer = registerPlayer;
+        window.loadPlayers = loadPlayers;
+        window.showMessage = showMessage;
+    </script>
+    <style>
+        /* Global 90s-inspired font setup */
+        body {
+            font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #e0e0e0;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            overflow-x: hidden;
+            cursor: url('https://icons.iconarchive.com/icons/pixelmixer/basic-web/16/pointer-icon.png'), auto;
+
+            /* Pepsi World-inspired green grid background */
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0, 255, 0, 0.2) 20px),
+                repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0, 255, 0, 0.2) 20px),
+                repeating-linear-gradient(45deg, rgba(0, 255, 0, 0.05) 0px, rgba(0, 255, 0, 0.05) 5px, transparent 5px, transparent 10px);
+            background-size: 20px 20px, 20px 20px, 10px 10px;
+            background-color: #0a0a0a;
+            image-rendering: pixelated;
+        }
+
+        /* 90s-style metallic panel base */
+        .panel-base {
+            background: linear-gradient(145deg, #444, #222, #444);
+            border: 2px outset #555;
+            box-shadow:
+                inset 0 0 5px rgba(255,255,255,0.2),
+                inset 0 0 10px rgba(0,0,0,0.5),
+                3px 3px 5px rgba(0,0,0,0.7);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        /* Top banner styling */
+        .top-banner {
+            width: 100%;
+            padding: 20px 0;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #ff00ff, #00ff00, #ff6600, #00ffff, #ff00ff);
+            border-bottom: 4px solid #ff0000;
+            box-shadow: 0 8px 20px rgba(255,0,255,0.9), 0 0 30px rgba(0,255,0,0.8); /* Static glow */
+            text-shadow: 3px 3px #ff00ff, -1px -1px #00ff00;
+            font-family: 'Comic Sans MS', 'VT323', 'Courier New', monospace;
+            font-size: clamp(1.5em, 5vw, 2.5em);
+            color: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            animation: bannerGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes bannerGlow {
+            0% { box-shadow: 0 8px 20px rgba(255,0,255,0.9); }
+            100% { box-shadow: 0 8px 25px rgba(255,0,255,1), 0 0 30px rgba(0,255,0,0.8); }
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            width: 100%;
+            max-width: 1200px;
+            box-sizing: border-box;
+        }
+
+        .content-section {
+            flex-grow: 1;
+            min-width: 300px;
+            max-width: 700px;
+            padding: 30px;
+            border-radius: 0;
+            animation: flicker 3s infinite alternate;
+            box-sizing: border-box;
+            background: rgba(0,0,0,0.8);
+            border: 3px outset #555;
+            box-shadow:
+                inset 0 0 5px rgba(255,255,255,0.2),
+                inset 0 0 10px rgba(0,0,0,0.5),
+                8px 8px 15px rgba(0,255,0,0.4),
+                -8px -8px 15px rgba(0,255,0,0.4);
+        }
+
+        @keyframes flicker {
+            0% { opacity: 1; }
+            50% { opacity: 0.98; }
+            100% { opacity: 1; }
+        }
+        
+        /* Add some truly terrible hover effects */
+        .btn:hover {
+            animation: shake 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-1px); }
+            75% { transform: translateX(1px); }
+        }
+
+        h1 {
+            font-family: 'Comic Sans MS', 'Comic Neue', 'Arial', sans-serif;
+            color: #ff6600;
+            text-shadow: 6px 6px #ff00ff, -3px -3px #ff00ff, 2px 2px #00ff00;
+            font-size: clamp(1.8em, 6vw, 3.5em);
+            margin-bottom: 25px;
+            letter-spacing: 2px;
+            word-wrap: break-word;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-family: 'Comic Sans MS', 'Comic Neue', 'Arial', sans-serif;
+            color: #ff00ff;
+            text-shadow: 3px 3px #00ff00, -1px -1px #00ff00;
+            font-size: clamp(1.3em, 4vw, 2.2em);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        h3 {
+            font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif;
+            color: #00ff00;
+            text-shadow: 1px 1px #000;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: clamp(0.9em, 2.5vw, 1.3em);
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        p {
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(0.9em, 2vw, 1.2em);
+            line-height: 1.8;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .button-group {
+            margin-top: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff00ff, #ff6600, #ff00ff);
+            color: #fff;
+            border: 3px outset #00ff00;
+            padding: 15px 30px;
+            margin: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Comic Sans MS', 'Comic Neue', 'Arial', sans-serif;
+            font-size: 1em;
+            text-transform: uppercase;
+            text-decoration: none;
+            box-shadow:
+                4px 4px 0px #00a000,
+                inset 0 0 8px rgba(255,255,255,0.4),
+                0 0 15px rgba(255,0,255,0.6);
+            transition: all 0.2s ease-in-out;
+            text-shadow: 2px 2px #000;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background-color: #00ffff;
+            color: #000;
+            box-shadow:
+                3px 3px 0px #005f5f,
+                inset 0 0 5px rgba(255,255,255,0.5);
+            transform: translate(-1px, -1px);
+        }
+
+        .warning-box {
+            background-color: #ffdd00;
+            color: #330033;
+            border: 3px dashed #ff0000;
+            padding: 10px 20px;
+            margin-top: 30px;
+            font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif;
+            font-size: clamp(0.7em, 1.5vw, 1em);
+            text-shadow: 1px 1px #fff;
+            box-shadow: 0 0 10px rgba(255,255,0,0.7);
+            max-width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Side panels styling */
+        .side-panel-group {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 250px;
+            max-width: 350px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .side-panel {
+            padding: 20px;
+            box-sizing: border-box;
+            background: linear-gradient(135deg, rgba(255,0,255,0.9), rgba(0,255,0,0.9), rgba(255,102,0,0.9));
+            border: 3px outset #ff00ff;
+            box-shadow:
+                inset 0 0 5px rgba(255,255,255,0.3),
+                inset 0 0 10px rgba(0,0,0,0.3),
+                8px 8px 15px rgba(255,0,255,0.8),
+                -8px -8px 15px rgba(0,255,0,0.8);
+            animation: sidePanelGlow 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes sidePanelGlow {
+            0% { box-shadow: 8px 8px 15px rgba(255,0,255,0.8), -8px -8px 15px rgba(0,255,0,0.8); }
+            100% { box-shadow: 8px 8px 20px rgba(255,0,255,1), -8px -8px 20px rgba(0,255,0,1); }
+        }
+
+        .side-panel ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(0.8em, 1.8vw, 1.1em);
+        }
+
+        .side-panel ul li {
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .side-panel ul li::before {
+            content: '>>>';
+            color: #ff00ff;
+            margin-right: 8px;
+            font-weight: bold;
+            text-shadow: 1px 1px #00ff00;
+        }
+
+        .side-panel a {
+            color: #ffcc00;
+            text-decoration: none;
+            text-shadow: 1px 1px #000;
+        }
+
+        .side-panel a:hover {
+            text-decoration: underline;
+            color: #ff00ff;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Custom Modal Styles */
+        .custom-modal {
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .custom-modal.show {
+            display: flex !important;
+        }
+        
+        /* Ensure modal is visible when shown */
+        .custom-modal:not(.hidden).show {
+            display: flex !important;
+        }
+
+        .modal-content {
+            background: linear-gradient(45deg, #ff00ff, #00ff00, #ff6600, #00ffff);
+            border: 4px outset #ff0000;
+            box-shadow: 0 0 25px rgba(255, 0, 255, 1), 0 0 35px rgba(0, 255, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px; /* Rounder corners */
+            max-width: 450px;
+            text-align: center;
+            font-family: 'Comic Sans MS', 'Comic Neue', 'Arial', sans-serif;
+            color: #000; /* Black text for contrast */
+            animation: modalPulse 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes modalPulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); }
+        }
+
+        .modal-content h3 {
+            color: #00ffff;
+            text-shadow: 2px 2px #ff00ff;
+            margin-bottom: 15px;
+            font-size: clamp(1em, 3vw, 1.5em);
+        }
+
+        .modal-content p {
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(0.9em, 2vw, 1.1em);
+            text-align: center; /* Center modal message */
+            margin-bottom: 20px;
+        }
+
+        .modal-close-btn {
+            background-color: #ff00ff;
+            color: #fff;
+            border: 2px outset #00ff00;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            box-shadow: 2px 2px 0px #00a000;
+            transition: all 0.1s ease-in-out;
+        }
+        .modal-close-btn:hover {
+            background-color: #00ffff;
+            color: #000;
+            box-shadow: 2px 2px 0px #005f5f;
+            transform: translate(-1px, -1px);
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .main-wrapper {
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+                padding: 10px;
+            }
+            .content-section, .side-panel-group {
+                max-width: 100%;
+                width: 100%;
+            }
+            .content-section {
+                padding: 20px;
+            }
+            .side-panel-group {
+                flex-direction: column;
+            }
+            .side-panel {
+                margin: 0; /* Remove individual margins */
+            }
+            h1 {
+                font-size: clamp(1.2em, 8vw, 2.5em);
+                text-shadow: 2px 2px #ff00ff;
+            }
+            h2 {
+                font-size: clamp(1em, 5vw, 1.5em);
+            }
+            h3 {
+                font-size: clamp(0.8em, 4vw, 1.2em);
+            }
+            p {
+                text-align: center; /* Center text on mobile for better flow */
+            }
+            .btn {
+                padding: 10px 20px;
+                font-size: 0.8em;
+                margin: 5px;
+                display: block; /* Stack buttons on small screens */
+                width: calc(100% - 20px);
+            }
+            .warning-box {
+                padding: 8px 15px;
+                font-size: clamp(0.6em, 1.8vw, 0.9em);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-banner">
+        ACCESS PROTOCOL
+    </div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="content-section panel-base">
+        <h1>ACCESS THE BREWER INVITATIONAL</h1>
+        <p>
+            Greetings, Planeswalker! To enter this dimension of competitive Magic, please input the correct access key.
+        </p>
+        <div style="margin-top: 20px;">
+            <label for="site-password-input" style="font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif; color: #ffcc00; font-size: 0.9em; text-shadow: 1px 1px #000;">
+                ACCESS KEY:
+            </label><br>
+            <input type="password" id="site-password-input" placeholder="********"
+                   style="background-color: #222; border: 2px inset #00ff00; color: #00ffff; padding: 8px; margin-top: 10px; font-family: 'Inter', sans-serif; font-size: 1em; width: calc(100% - 40px); max-width: 300px;">
+        </div>
+        <div class="button-group">
+            <a href="#" class="btn" onclick="checkPassword()">ENTER THE REALM</a>
+        </div>
+    </div>
+
+    <!-- Main Content Wrapper (Hidden until password entered) -->
+    <div class="main-wrapper hidden" id="main-content-wrapper">
+        <div id="home-page-content" class="content-section panel-base">
+            <h1>Welcome to the official website for The Brewer Invitational 2025!</h1>
+            <p>
+                Prepare for an epic Magic: The Gathering tournament! Get ready to duel with friends and foes in a battle for supremacy.
+                This site is your gateway to registration, tournament information, and drafting tips.
+            </p>
+
+            <h2>Tournament Details:</h2>
+            <p>
+                <strong>Name:</strong> The Brewer Invitational 2025<br>
+                <strong>Date:</strong> Saturday, November 8th<br>
+                <strong>Entry Fee:</strong> $20<br>
+                <strong>Format:</strong> Draft<br>
+                <strong>Set:</strong> Foundations<br>
+                <strong>Prize:</strong> The champion will walk away with a <strong>Foundations Bundle</strong> (valued around $50!), packed with Set Boosters and more to kickstart their next brewing adventure.
+            </p>
+
+            <div class="button-group">
+                <a href="#" class="btn" data-target="home-page-content">Home</a>
+                <a href="#" class="btn" data-target="draft-explanation-page">What is Drafting?</a>
+                <a href="#" class="btn" data-target="registration-page">Register Now!</a>
+                <a href="#" class="btn" data-target="schedule-page">View Schedule</a>
+                <a href="#" class="btn" data-target="players-page">Players List</a>
+            </div>
+
+            <div class="warning-box">
+                WARNING: IF YOUR INTERNET IS DIAL-UP, BEWARE OF GRAPHICAL OVERLOAD! PRESS F5 FREQUENTLY.
+            </div>
+            
+
+            <div style="background: linear-gradient(45deg, #ff00ff, #00ff00, #ff6600); border: 3px dashed #ff0000; padding: 15px; margin: 20px 0; text-align: center; font-family: 'Comic Sans MS'; color: #fff; text-shadow: 2px 2px #000;">
+                <strong style="font-size: 1.2em;">HOT NEW FEATURE!</strong><br>
+                <span style="color: #ffff00;">UNDER CONSTRUCTION - COMING SOON!</span><br>
+                <span style="color: #00ffff; font-size: 0.9em;">*BEST VIEWED WITH NETSCAPE NAVIGATOR*</span>
+            </div>
+
+            <p style="font-size: 0.8em; margin-top: 30px; font-family: 'Inter', sans-serif;">
+                &copy; 1995-2025 The Brewer Invitational. All rights reserved. Beware of power creep.
+            </p>
+        </div>
+        <!-- Drafting Explanation Page -->
+        <div id="draft-explanation-page" class="content-section panel-base hidden">
+            <h1>What is Drafting?</h1>
+            <p>
+                Welcome, aspiring Planeswalkers, to the thrilling world of Magic: The Gathering Booster Draft! If you're new to this electrifying format, fear not – The Brewer Invitational is the perfect place to learn and conquer.
+            </p>
+            <p>
+                In a draft, you won't use a pre-constructed deck. Instead, you'll open fresh booster packs and build your deck on the fly! Here's how it works:
+            </p>
+            <p>
+                Each player sits around a table with three booster packs. You open one pack, pick one card to keep for your deck, and then pass the rest of the cards to the player next to you. You'll receive a pack from the player on your other side, pick a card, and pass again! This continues until all cards from the first round of packs are gone. Then, you open the second pack, reverse the passing direction, and repeat. Finally, the third pack is opened, and you pass in the original direction again.
+            </p>
+            <p>
+                The challenge? Adapting! You need to read signals from other players, identify open colors, and construct a powerful 40-card deck (including basic lands, which we'll provide!) using only the cards you draft. It's a true test of skill, strategy, and improvisation!
+            </p>
+
+            <h2>The $20 Entry Fee - Why Pay the Man?</h2>
+            <p>
+                The $20 entry fee for The Brewer Invitational helps us keep the lights on and the magic flowing! Here's what your entry covers:
+            </p>
+            <ul>
+                <li><strong>Prize Support:</strong> The majority of the entry fee goes directly into the prize pool. The champion will receive a coveted **Foundations Bundle**, packed with exciting cards to boost their collection!</li>
+                <li><strong>Booster Packs:</strong> It covers the cost of the three fresh "Foundations" booster packs you'll use for drafting.</li>
+                <li><strong>Event Operations:</strong> This helps with the general organization of the tournament, including pairing software, basic land provision, and ensuring a smooth, fun experience for everyone.</li>
+            </ul>
+            <p>
+                By contributing, you're not just getting a seat at the table; you're supporting a vibrant Magic community and the chance for glory! We believe in transparent costs to ensure maximum brewing pleasure.
+            </p>
+            <p>
+                See you at the draft table!
+            </p>
+            <div class="button-group">
+                <a href="#" class="btn" data-target="home-page-content">Return to Home</a>
+                <a href="#" class="btn" data-target="registration-page">Register Now!</a>
+            </div>
+        </div>
+
+        <!-- Registration Page -->
+        <div id="registration-page" class="content-section panel-base hidden">
+            <h1>Registration Terminal</h1>
+            <p>
+                Greetings, new recruit! Enter your Planeswalker Name and plug in your data chip to register for The Brewer Invitational.
+            </p>
+                         <div style="margin-top: 20px;">
+                 <label for="player-name-input" style="font-family: 'Comic Neue', 'Comic Sans MS', 'Arial', sans-serif; color: #ffcc00; font-size: 0.9em; text-shadow: 1px 1px #000;">
+                     PLANESWALKER NAME:
+                 </label><br>
+                 <input type="text" id="player-name-input" placeholder="First Last (e.g., John Smith)"
+                        style="background-color: #222; border: 2px inset #00ff00; color: #00ffff; padding: 8px; margin-top: 10px; font-family: 'Inter', sans-serif; font-size: 1em; width: calc(100% - 40px); max-width: 300px;">
+                 <p style="font-size: 0.8em; color: #00ff00; margin-top: 5px; text-align: center;">
+                     Format: First Last (max 25 characters, letters only)
+                 </p>
+             </div>
+            <div class="button-group">
+                <a href="#" class="btn" onclick="registerPlayer()">REGISTER!</a>
+                <a href="#" class="btn" data-target="home-page-content">Return to Home</a>
+            </div>
+        </div>
+
+        <!-- Tournament Schedule Page -->
+        <div id="schedule-page" class="content-section panel-base hidden">
+            <!-- Add some truly terrible 90s content at the top -->
+            <div style="background: linear-gradient(90deg, #ff00ff, #00ff00, #ff6600); border: 4px double #ffff00; padding: 15px; margin: 0 0 20px 0; text-align: center; font-family: 'Comic Sans MS'; color: #000; text-shadow: 1px 1px #fff;">
+                <strong style="font-size: 1.3em; color: #ff0000;">TOURNAMENT STATUS: READY TO RUMBLE!</strong><br>
+                <span style="color: #0000ff; font-size: 1em;">*SYSTEM STATUS: OPTIMAL*</span><br>
+                <span style="color: #ff6600; font-size: 0.9em;">*PIZZA DELIVERY CONFIRMED*</span>
+            </div>
+            <h1>Tournament Timeline</h1>
+            <p>
+                Here's the complete schedule for The Brewer Invitational 2025! Plan your arrival and prepare for an epic night of Magic.
+            </p>
+            
+            <div style="background: rgba(0,255,0,0.1); border: 2px solid #00ff00; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h2 style="color: #00ff00; text-align: center; margin-bottom: 20px;">EVENT SCHEDULE</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; text-align: left; font-family: 'VT323', monospace;">
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">6:30 PM</div>
+                    <div style="color: #fff;"><strong>ARRIVAL & CHECK-IN</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">Get settled, pay entry fee, meet your fellow Planeswalkers!</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">7:00 PM</div>
+                    <div style="color: #fff;"><strong>DRAFT BEGINS</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">Three rounds of Foundations booster drafting!</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">8:00 PM</div>
+                    <div style="color: #fff;"><strong>DECK BUILDING + PIZZA</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">Construct your 40-card deck while enjoying delicious pizza!</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">9:00 PM</div>
+                    <div style="color: #fff;"><strong>ROUND 1</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">First battles begin! Best of 3 matches.</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">10:00 PM</div>
+                    <div style="color: #fff;"><strong>ROUND 2</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">The competition heats up!</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">11:00 PM</div>
+                    <div style="color: #fff;"><strong>ROUND 3</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">Final battles for glory!</span></div>
+                    
+                    <div style="color: #00ffff; font-weight: bold; text-align: right;">12:00 AM</div>
+                    <div style="color: #fff;"><strong>AWARDS CEREMONY</strong><br>
+                    <span style="color: #ffcc00; font-size: 0.9em;">Champion crowned and Foundations Bundle awarded!</span></div>
+                </div>
+            </div>
+            
+            <p style="font-size: 0.9em; color: #00ff00; text-align: center; margin-top: 20px;">
+                <strong>Total Event Duration:</strong> 5.5 hours of pure Magic action!<br>
+                <strong>Format:</strong> Swiss rounds (everyone plays 3 matches)
+            </p>
+            
+            <div class="button-group">
+                <a href="#" class="btn" data-target="home-page-content">Return to Home</a>
+                <a href="#" class="btn" data-target="registration-page">Register Now!</a>
+            </div>
+        </div>
+
+        <!-- Players List Page -->
+        <div id="players-page" class="content-section panel-base hidden">
+            <h1>Registered Planeswalkers</h1>
+            <p>
+                Behold the valiant souls ready to do battle in The Brewer Invitational!
+            </p>
+            <div id="players-list-content" style="margin-top: 20px; min-height: 100px; display: flex; align-items: center; justify-content: center;">
+                <p style="text-align: center;">*LOADING PLANESWALKER DATA... STAND BY...*</p>
+            </div>
+            <div class="button-group">
+                <a href="#" class="btn" data-target="home-page-content">Return to Home</a>
+            </div>
+        </div>
+
+        <div class="side-panel-group">
+            <!-- Left Side Panel - Inspired by "CHECK OUT THE MICROSOFT CONNECTION!" -->
+            <div class="side-panel panel-base">
+                <h3>Check out the latest brews!</h3>
+                <ul>
+                    <li><a href="https://draftsim.com/mtg-draft-guide/">The Ultimate Drafting Guide</a></li>
+                    <li><a href="https://draftsim.com/mtg-fdn-draft-guide/">Foundations Specific Drafting Tips</a></li>
+                    <li><a href="https://www.tcgplayer.com/content/article/MTG-Foundations-Draft-Pick-Order-and-Archetypes/4c20a954-1024-44ca-abe1-4579382f3076/">Foundations Pick order and Deck Archetypes</a></li>
+                </ul>
+            </div>
+
+            <!-- Right Side Panel - Inspired by "APPLICATIONS NEEDED" -->
+            <div class="side-panel panel-base">
+                <h3>Oracle Text Library Needed</h3>
+                <ul>
+                    <li>
+                        <a href="https://draftsim.com/draft.php?mode=Draft_FDN">
+                            <img src="https://placehold.co/16x16/0000ff/ffffff?text=O" alt="Oracle Icon" style="vertical-align: middle; margin-right: 5px; image-rendering: pixelated;">
+                            Virtual practice draft!
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://scryfall.com/sets/fdn">
+                            <img src="https://placehold.co/16x16/ff0000/ffffff?text=F" alt="Scryfall Icon" style="vertical-align: middle; margin-right: 5px; image-rendering: pixelated;">
+                            View the whole Foundations set
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal Structure -->
+    <div id="custom-modal" class="custom-modal">
+        <div class="modal-content">
+            <h3 id="modal-title"></h3>
+            <p id="modal-message"></p>
+            <button id="modal-close-btn" class="modal-close-btn">OKAY</button>
+        </div>
+    </div>
+
+</body>
+</html>
