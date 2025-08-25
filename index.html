@@ -11,7 +11,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Global Variables (will be replaced during build)
+        // Firebase Global Variables (will be replaced during Vercel build)
         const firebaseConfig = {
             apiKey: "API_KEY",
             authDomain: "AUTH_DOMAIN",
@@ -32,14 +32,25 @@
         const SITE_PASSWORD = "brewer2025";
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // Initialize Firebase only if config is available
-            if (Object.keys(firebaseConfig).length > 0) {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                console.log("Firebase initialized. User ID:", userId);
+            // Check if Firebase config values are actual values or still placeholders
+            const hasValidConfig = firebaseConfig.apiKey && 
+                                 firebaseConfig.apiKey !== "API_KEY" && 
+                                 firebaseConfig.projectId && 
+                                 firebaseConfig.projectId !== "PROJECT_ID";
+            
+            if (hasValidConfig) {
+                try {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    console.log("Firebase initialized successfully. User ID:", userId);
+                } catch (error) {
+                    console.error("Failed to initialize Firebase:", error);
+                    showMessage('Firebase Error', 'Failed to connect to database. Please check configuration.');
+                }
             } else {
-                console.warn("Firebase config not available. Database features will be disabled.");
-                // showMessage('Warning', 'Firebase is not configured. Registration and player list features will not work.');
+                console.warn("Firebase config not properly loaded. Database features will be disabled.");
+                console.warn("Config values:", firebaseConfig);
+                showMessage('Configuration Error', 'Firebase configuration not loaded. Registration and player list features will not work.');
             }
 
             // Client-side navigation logic

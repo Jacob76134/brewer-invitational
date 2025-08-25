@@ -1,0 +1,16 @@
+{
+  "name": "brewer-invitational",
+  "version": "1.0.0",
+  "description": "The Brewer Invitational 2025 Magic: The Gathering Tournament Website",
+  "main": "index.html",
+  "scripts": {
+    "build": "node build.js",
+    "start": "npx serve ."
+  },
+  "keywords": ["magic", "gathering", "tournament", "draft"],
+  "author": "The Brewer Invitational",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}
