@@ -32,19 +32,19 @@
         const SITE_PASSWORD = "brewer2025";
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // Check if Firebase config values are actual values or still placeholders
+            // Check if Firebase config values are actual values (not empty strings)
             const hasValidConfig = firebaseConfig.apiKey && 
-                                 firebaseConfig.apiKey !== "API_KEY" && 
+                                 firebaseConfig.apiKey.length > 0 && 
                                  firebaseConfig.projectId && 
-                                 firebaseConfig.projectId !== "PROJECT_ID" &&
+                                 firebaseConfig.projectId.length > 0 &&
                                  firebaseConfig.authDomain &&
-                                 firebaseConfig.authDomain !== "AUTH_DOMAIN" &&
+                                 firebaseConfig.authDomain.length > 0 &&
                                  firebaseConfig.storageBucket &&
-                                 firebaseConfig.storageBucket !== "STORAGE_BUCKET" &&
+                                 firebaseConfig.storageBucket.length > 0 &&
                                  firebaseConfig.messagingSenderId &&
-                                 firebaseConfig.messagingSenderId !== "MESSAGING_SENDER_ID" &&
+                                 firebaseConfig.messagingSenderId.length > 0 &&
                                  firebaseConfig.appId &&
-                                 firebaseConfig.appId !== "APP_ID";
+                                 firebaseConfig.appId.length > 0;
             
             if (hasValidConfig) {
                 try {
@@ -59,12 +59,12 @@
                 console.warn("Firebase config not properly loaded. Database features will be disabled.");
                 console.warn("Config values:", firebaseConfig);
                 console.warn("Validation check failed. Checking individual values:");
-                console.warn("apiKey valid:", firebaseConfig.apiKey && firebaseConfig.apiKey !== "API_KEY");
-                console.warn("projectId valid:", firebaseConfig.projectId && firebaseConfig.projectId !== "PROJECT_ID");
-                console.warn("authDomain valid:", firebaseConfig.authDomain && firebaseConfig.authDomain !== "AUTH_DOMAIN");
-                console.warn("storageBucket valid:", firebaseConfig.storageBucket && firebaseConfig.storageBucket !== "STORAGE_BUCKET");
-                console.warn("messagingSenderId valid:", firebaseConfig.messagingSenderId && firebaseConfig.messagingSenderId !== "MESSAGING_SENDER_ID");
-                console.warn("appId valid:", firebaseConfig.appId && firebaseConfig.appId !== "APP_ID");
+                console.warn("apiKey valid:", firebaseConfig.apiKey && firebaseConfig.apiKey.length > 0);
+                console.warn("projectId valid:", firebaseConfig.projectId && firebaseConfig.projectId.length > 0);
+                console.warn("authDomain valid:", firebaseConfig.authDomain && firebaseConfig.authDomain.length > 0);
+                console.warn("storageBucket valid:", firebaseConfig.storageBucket && firebaseConfig.storageBucket.length > 0);
+                console.warn("messagingSenderId valid:", firebaseConfig.messagingSenderId && firebaseConfig.messagingSenderId.length > 0);
+                console.warn("appId valid:", firebaseConfig.appId && firebaseConfig.appId.length > 0);
                 showMessage('Configuration Error', 'Firebase configuration not loaded. Registration and player list features will not work.');
             }
 
