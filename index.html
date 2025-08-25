@@ -12,15 +12,15 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Global Variables (Vercel environment variables)
+        // Firebase Global Variables (from config.js)
         const firebaseConfig = {
-            apiKey: process.env.API_KEY || window.API_KEY,
-            authDomain: process.env.AUTH_DOMAIN || window.AUTH_DOMAIN,
-            projectId: process.env.PROJECT_ID || window.PROJECT_ID,
-            storageBucket: process.env.STORAGE_BUCKET || window.STORAGE_BUCKET,
-            messagingSenderId: process.env.MESSAGING_SENDER_ID || window.MESSAGING_SENDER_ID,
-            appId: process.env.APP_ID || window.APP_ID,
-            measurementId: process.env.MEASUREMENT_ID || window.MEASUREMENT_ID
+            apiKey: window.API_KEY,
+            authDomain: window.AUTH_DOMAIN,
+            projectId: window.PROJECT_ID,
+            storageBucket: window.STORAGE_BUCKET,
+            messagingSenderId: window.MESSAGING_SENDER_ID,
+            appId: window.APP_ID,
+            measurementId: window.MEASUREMENT_ID
         };
 
 
@@ -73,7 +73,7 @@
         });
 
         // Function to check password and grant access
-        window.checkPassword = () => {
+        const checkPassword = () => {
             const passwordInput = document.getElementById('site-password-input');
             const enteredPassword = passwordInput.value;
 
@@ -251,6 +251,7 @@
         };
 
         // Make functions available globally
+        window.checkPassword = checkPassword;
         window.registerPlayer = registerPlayer;
         window.loadPlayers = loadPlayers;
         window.showMessage = showMessage;
@@ -353,7 +354,7 @@
         
         /* Add some truly terrible hover effects */
         .btn:hover {
-            animation: shake 0.3s ease-in-out infinite;
+            animation: shake 0.3s ease-in-out;
         }
         
         @keyframes shake {
